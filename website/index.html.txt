@@ -357,7 +357,7 @@
     <a href="https://github.com/Vishruu/VSFileExplorer">GitHub</a>
     <a href="https://github.com/Vishruu/VSFileExplorer/issues">Report Bug</a>
     <a href="https://github.com/Vishruu/VSFileExplorer/releases">Releases</a>
-    <a href="mailto:vishalsalve699@gmail.com">Contact</a>
+    <a href="mailto:vishruu.dev@gmail.com">Contact</a>
   </div>
   <p>Made with 💜 by <strong>Vishruu</strong> · © 2026</p>
 </footer>
