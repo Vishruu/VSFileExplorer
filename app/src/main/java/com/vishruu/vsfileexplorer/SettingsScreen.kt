@@ -467,11 +467,11 @@ fun SettingsScreen(
         SettingsItem(
             icon = Icons.Filled.Email,
             title = "Contact / Feedback",
-            subtitle = "vishalsalve699@gmail.com",
+            subtitle = "vishruu.dev@gmail.com",
             onClick = {
                 try {
                     val i = Intent(Intent.ACTION_SENDTO).apply {
-                        data = Uri.parse("mailto:vishalsalve699@gmail.com")
+                        data = Uri.parse("mailto:vishruu.dev@gmail.com")
                         putExtra(Intent.EXTRA_SUBJECT, "VS File Explorer Feedback")
                     }
                     context.startActivity(i)
