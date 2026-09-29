@@ -1,5 +1,10 @@
 package com.vishruu.vsfileexplorer
 
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.ExperimentalFoundationApi
 import android.content.Context
 import androidx.compose.foundation.background
@@ -464,6 +469,16 @@ fun StorageAnalyzerScreen(
                     Spacer(Modifier.height(12.dp))
                     Text("Scanning storage...", fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f))
+                    if (scanningText.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = scanningText,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            maxLines = 1,
+                            modifier = Modifier.padding(horizontal = 24.dp)
+                        )
+                    }
                 }
             }
             return@Column
