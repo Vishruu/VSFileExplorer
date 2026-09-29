@@ -77,7 +77,7 @@ fun PrivacyPolicyScreen(onBack: () -> Unit) {
                     "No ads. No trackers. No external analytics.")
 
         PolicySection("Contact",
-            "For questions, contact: vishalsalve699@gmail.com")  //change mail id before publish
+            "For questions, contact: vishruu.dev@gmail.com")  //change mail id before publish
 
         Spacer(Modifier.height(24.dp))
 
