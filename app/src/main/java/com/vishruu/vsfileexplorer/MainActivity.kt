@@ -1,18 +1,15 @@
 package com.vishruu.vsfileexplorer
 
-import androidx.compose.material.icons.filled.Home
 import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
 import android.widget.Toast
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -62,21 +59,17 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -102,8 +95,6 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -117,7 +108,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-
 
 fun chipsForCategory(catLabel: String): List<Pair<String, List<String>>> {
     return when (catLabel) {
@@ -251,6 +241,35 @@ fun FileExplorerScreen(
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val haptic = LocalHapticFeedback.current
 
+    // ===== Dialog states =====
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var showShredDialog by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var showNewFolderDialog by remember { mutableStateOf(false) }
+    var showZipDialog by remember { mutableStateOf(false) }
+    var newFolderText by remember { mutableStateOf("") }
+
+    var showEncryptChoice by remember { mutableStateOf(false) }
+    var onePasswordForAll by remember { mutableStateOf(true) }
+    var showEncryptDialog by remember { mutableStateOf(false) }
+    var pendingEncryptPaths by remember { mutableStateOf<List<String>>(emptyList()) }
+    var currentEncryptIndex by remember { mutableStateOf(0) }
+
+    var showDecryptDialog by remember { mutableStateOf(false) }
+    var decryptTargetPath by remember { mutableStateOf<String?>(null) }
+    var showDecryptMultiDialog by remember { mutableStateOf(false) }
+
+    var showProgress by remember { mutableStateOf(false) }
+    var progressPercent by remember { mutableStateOf(0) }
+    var progressLabel by remember { mutableStateOf("") }
+    var progressCancelled by remember { mutableStateOf(false) }
+    var progressHideable by remember { mutableStateOf(false) }
+    var progressHidden by remember { mutableStateOf(false) }
+
+    var appBackupRunning by remember { mutableStateOf(false) }
+    var appBackupProgress by remember { mutableStateOf(0) }
+
+    // ===== Main states =====
     var searchSizeFilter by remember { mutableStateOf(SearchSizeFilter.ANY) }
     var searchTypeFilter by remember { mutableStateOf(SearchTypeFilter.ANY) }
     var searchDateFilter by remember { mutableStateOf(SearchDateFilter.ANY) }
@@ -312,8 +331,6 @@ fun FileExplorerScreen(
     var appSearchQuery by remember { mutableStateOf("") }
     var selectedApp by remember { mutableStateOf<AppInfo?>(null) }
     var showAppMenuDialog by remember { mutableStateOf(false) }
-    var appBackupRunning by remember { mutableStateOf(false) }
-    var appBackupProgress by remember { mutableStateOf(0) }
 
     var showImageViewer by remember { mutableStateOf(false) }
     var imageViewerList by remember { mutableStateOf<List<File>>(emptyList()) }
@@ -332,51 +349,6 @@ fun FileExplorerScreen(
     var showAudioPlayer by remember { mutableStateOf(false) }
     var audioPlayerList by remember { mutableStateOf<List<File>>(emptyList()) }
     var audioPlayerIndex by remember { mutableIntStateOf(0) }
-
-    var showDeleteDialog by remember { mutableStateOf(false) }
-    var showShredDialog by remember { mutableStateOf(false) }
-    var isShredding by remember { mutableStateOf(false) }
-    var shredProgress by remember { mutableIntStateOf(0) }
-    var moveToTrash by remember { mutableStateOf(true) }
-    var showRenameDialog by remember { mutableStateOf(false) }
-    var showNewFolderDialog by remember { mutableStateOf(false) }
-    var showZipDialog by remember { mutableStateOf(false) }
-    var renameText by remember { mutableStateOf("") }
-    var newFolderText by remember { mutableStateOf("") }
-    var zipName by remember { mutableStateOf("") }
-
-    var showEncryptChoice by remember { mutableStateOf(false) }
-    var onePasswordForAll by remember { mutableStateOf(true) }
-    var showEncryptDialog by remember { mutableStateOf(false) }
-    var encryptPassword by remember { mutableStateOf("") }
-    var encryptPasswordConfirm by remember { mutableStateOf("") }
-    var encryptFileName by remember { mutableStateOf(false) }
-    var showEncryptPassword by remember { mutableStateOf(false) }
-    var encryptError by remember { mutableStateOf<String?>(null) }
-    var pendingEncryptPaths by remember { mutableStateOf<List<String>>(emptyList()) }
-    var currentEncryptIndex by remember { mutableStateOf(0) }
-
-    var showDecryptDialog by remember { mutableStateOf(false) }
-    var decryptPassword by remember { mutableStateOf("") }
-    var showDecryptPassword by remember { mutableStateOf(false) }
-    var decryptError by remember { mutableStateOf<String?>(null) }
-    var decryptTargetPath by remember { mutableStateOf<String?>(null) }
-    var decryptAttempts by remember { mutableStateOf(0) }
-    var decryptLockUntil by remember { mutableStateOf(0L) }
-    var decryptLockRemaining by remember { mutableStateOf(0) }
-    var showDecryptMultiDialog by remember { mutableStateOf(false) }
-    var decryptMultiPassword by remember { mutableStateOf("") }
-    var showDecryptMultiPassword by remember { mutableStateOf(false) }
-    var decryptMultiError by remember { mutableStateOf<String?>(null) }
-    var decryptMultiRunning by remember { mutableStateOf(false) }
-    var decryptMultiProgress by remember { mutableIntStateOf(0) }
-
-    var showProgress by remember { mutableStateOf(false) }
-    var progressPercent by remember { mutableStateOf(0) }
-    var progressLabel by remember { mutableStateOf("") }
-    var progressCancelled by remember { mutableStateOf(false) }
-    var progressHideable by remember { mutableStateOf(false) }
-    var progressHidden by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -538,19 +510,6 @@ fun FileExplorerScreen(
             isAppsLoading = true
             installedApps = withContext(Dispatchers.IO) { loadInstalledApps(context) }
             isAppsLoading = false
-        }
-    }
-
-    LaunchedEffect(decryptLockUntil) {
-        if (decryptLockUntil > System.currentTimeMillis()) {
-            while (System.currentTimeMillis() < decryptLockUntil) {
-                decryptLockRemaining = ((decryptLockUntil - System.currentTimeMillis()) / 1000).toInt() + 1
-                delay(500)
-            }
-            decryptLockRemaining = 0
-            decryptLockUntil = 0L
-            decryptAttempts = 0
-            decryptError = null
         }
     }
 
@@ -770,7 +729,6 @@ fun FileExplorerScreen(
                 onBack = { showRecents = false },
                 onOpenFile = { file ->
                     if (file.isDirectory) {
-                        // Folder hai — usme navigate karo
                         showRecents = false
                         currentScreen = "browse"
                         currentPath = file.absolutePath
@@ -780,7 +738,6 @@ fun FileExplorerScreen(
                             }
                         }
                     } else {
-                        // File hai — external app se kholo
                         openFile(context, file)
                     }
                 }
@@ -794,6 +751,16 @@ fun FileExplorerScreen(
                 context = context,
                 file = viewingPdf,
                 onBack = { PdfViewerHub.consume() }
+            )
+            return@ModalNavigationDrawer
+        }
+
+        val editingFile = TextEditorHub.pendingFile
+        if (editingFile != null) {
+            TextEditorScreen(
+                context = context,
+                file = editingFile,
+                onBack = { TextEditorHub.consume() }
             )
             return@ModalNavigationDrawer
         }
@@ -1522,9 +1489,6 @@ fun FileExplorerScreen(
                         }
                         "toolbox" -> { showToolbox = true }
                         "recycle" -> { showRecycleBin = true }
-                        "bookmarks" -> {
-                            Toast.makeText(context, "Bookmarks on home screen", Toast.LENGTH_SHORT).show()
-                        }
                         else -> {
                             activeCategory = null
                             currentPath = key
@@ -1576,50 +1540,62 @@ fun FileExplorerScreen(
                 onOpenNewFolder = { newFolderText = ""; showNewFolderDialog = true },
                 onOpenNewFile = { type ->
                     when (type) {
-                        "Folder" -> { newFolderText = ""; showNewFolderDialog = true }
+                        "Folder" -> {
+                            newFolderText = ""
+                            showNewFolderDialog = true
+                        }
                         "Text File" -> {
-                            val f = getUniqueFile(File(currentPath), "newfile.txt")
-                            try {
-                                f.createNewFile()
-                                files = loadFiles(currentPath, sortMode, showHidden)
-                                Toast.makeText(context, "Created ${f.name}", Toast.LENGTH_SHORT).show()
-                            } catch (e: Exception) { Toast.makeText(context, "Failed", Toast.LENGTH_SHORT).show() }
+                            scope.launch {
+                                val err = createFileSafely(context, File(currentPath), "newfile.txt")
+                                if (err == null) {
+                                    Toast.makeText(context, "Text file created",
+                                        Toast.LENGTH_SHORT).show()
+                                    delay(400)
+                                    files = withContext(Dispatchers.IO) {
+                                        loadFiles(currentPath, sortMode, showHidden)
+                                    }
+                                } else {
+                                    Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                }
+                            }
                         }
                         "Excel File" -> {
-                            val f = getUniqueFile(File(currentPath), "newfile.csv")
-                            try {
-                                f.createNewFile()
-                                files = loadFiles(currentPath, sortMode, showHidden)
-                                Toast.makeText(context, "Created ${f.name}", Toast.LENGTH_SHORT).show()
-                            } catch (e: Exception) { Toast.makeText(context, "Failed", Toast.LENGTH_SHORT).show() }
+                            scope.launch {
+                                val err = createFileSafely(context, File(currentPath), "newfile.csv")
+                                if (err == null) {
+                                    Toast.makeText(context, "CSV file created",
+                                        Toast.LENGTH_SHORT).show()
+                                    delay(400)
+                                    files = withContext(Dispatchers.IO) {
+                                        loadFiles(currentPath, sortMode, showHidden)
+                                    }
+                                } else {
+                                    Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                }
+                            }
                         }
                     }
                 },
-                onOpenRename = { path -> renameText = File(path).name; showRenameDialog = true },
+                onOpenRename = { path -> showRenameDialog = true },
                 onOpenDelete = { showDeleteDialog = true },
                 onOpenShred = { showShredDialog = true },
                 onOpenEncrypt = {
                     if (selectedPaths.size == 1) {
                         pendingEncryptPaths = selectedPaths.toList()
-                        currentEncryptIndex = 0; onePasswordForAll = true
-                        encryptPassword = ""; encryptPasswordConfirm = ""
-                        encryptFileName = false; encryptError = null
+                        currentEncryptIndex = 0
+                        onePasswordForAll = true
                         showEncryptDialog = true
                     } else {
-                        onePasswordForAll = true; showEncryptChoice = true
+                        onePasswordForAll = true
+                        showEncryptChoice = true
                     }
                 },
                 onOpenDecrypt = { path ->
                     decryptTargetPath = path
-                    decryptPassword = ""; decryptError = null
-                    showDecryptPassword = false; showDecryptDialog = true
+                    showDecryptDialog = true
                 },
                 onOpenDecryptMulti = { showDecryptMultiDialog = true },
-                onOpenZip = {
-                    val firstName = File(selectedPaths.first()).name.substringBeforeLast('.')
-                    zipName = if (selectedPaths.size == 1) firstName else "archive"
-                    showZipDialog = true
-                },
+                onOpenZip = { showZipDialog = true },
                 onOpenUnzip = { path ->
                     val target = File(path)
                     scope.launch {
@@ -1698,756 +1674,156 @@ fun FileExplorerScreen(
         }
     }
 
-    val propFile = propertiesFile
-    if (propFile != null && activeCategory == null) {
-        FilePropertiesDialog(file = propFile, onDismiss = { propertiesFile = null })
+    // ===== DIALOGS =====
+    if (showNewFolderDialog) {
+        NewFolderDialog(
+            currentPath = currentPath,
+            context = context,
+            onDismiss = {
+                showNewFolderDialog = false
+                newFolderText = ""
+            },
+            onCreated = {
+                scope.launch {
+                    delay(400)
+                    files = withContext(Dispatchers.IO) {
+                        loadFiles(currentPath, sortMode, showHidden)
+                    }
+                }
+            }
+        )
     }
 
     if (showDeleteDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Delete ${selectedPaths.size} item(s)?") },
-            text = {
-                Column {
-                    Text("This action cannot be undone if Recycle Bin is unchecked.",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
-                    Spacer(Modifier.height(12.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Checkbox(
-                            checked = moveToTrash,
-                            onCheckedChange = { moveToTrash = it }
-                        )
-                        Text("Move to Recycle Bin", fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.onBackground)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    TextButton(
-                        onClick = {
-                            showDeleteDialog = false
-                            showRecycleBin = true
-                        },
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Text("View Recycle Bin", fontSize = 12.sp)
-                    }
-                }
+        DeleteConfirmDialog(
+            selectedPaths = selectedPaths,
+            context = context,
+            onDismiss = { showDeleteDialog = false },
+            onDeleted = {
+                selectedPaths = emptySet()
+                files = loadFiles(currentPath, sortMode, showHidden)
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    selectedPaths.forEach { path ->
-                        val f = File(path)
-                        if (f.exists()) {
-                            if (moveToTrash) {
-                                TrashStore.moveToTrash(f)
-                            } else {
-                                deleteRecursive(f)
-                            }
-                        }
-                    }
-                    selectedPaths = emptySet()
-                    files = loadFiles(currentPath, sortMode, showHidden)
-                    showDeleteDialog = false
-                    Toast.makeText(
-                        context,
-                        if (moveToTrash) "Moved to Recycle Bin" else "Deleted permanently",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }) { Text("Delete") }
-            },
-            dismissButton = { TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") } }
+            onOpenRecycleBin = { showRecycleBin = true }
         )
     }
 
     if (showRenameDialog) {
-        AlertDialog(
-            onDismissRequest = { showRenameDialog = false },
-            title = { Text("Rename") },
-            text = {
-                OutlinedTextField(value = renameText, onValueChange = { renameText = it },
-                    label = { Text("New name") }, singleLine = true)
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (selectedPaths.isNotEmpty()) {
-                        val oldF = File(selectedPaths.first())
-                        val newF = File(oldF.parent, renameText)
-                        if (oldF.renameTo(newF)) {
-                            selectedPaths = emptySet()
-                            files = loadFiles(currentPath, sortMode, showHidden)
-                        }
-                    }
-                    showRenameDialog = false
-                }) { Text("Rename") }
-            },
-            dismissButton = { TextButton(onClick = { showRenameDialog = false }) { Text("Cancel") } }
-        )
-    }
-
-    if (showNewFolderDialog) {
-        AlertDialog(
-            onDismissRequest = { showNewFolderDialog = false },
-            title = { Text("New Folder") },
-            text = {
-                OutlinedTextField(value = newFolderText, onValueChange = { newFolderText = it },
-                    label = { Text("Folder name") }, singleLine = true)
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val n = newFolderText.trim()
-                    if (n.isNotEmpty()) {
-                        val d = File(currentPath, n)
-                        val created = if (!d.exists()) d.mkdirs() else true
-                        if (created) {
-                            MediaScannerConnection.scanFile(context, arrayOf(d.absolutePath), null, null)
-                            Toast.makeText(context, "Folder created", Toast.LENGTH_SHORT).show()
-                        }
-                        files = loadFiles(currentPath, sortMode, showHidden)
-                    }
-                    showNewFolderDialog = false
-                }) { Text("Create") }
-            },
-            dismissButton = { TextButton(onClick = { showNewFolderDialog = false }) { Text("Cancel") } }
+        RenameDialog(
+            selectedPaths = selectedPaths,
+            context = context,
+            onDismiss = { showRenameDialog = false },
+            onRenamed = {
+                selectedPaths = emptySet()
+                files = loadFiles(currentPath, sortMode, showHidden)
+            }
         )
     }
 
     if (showZipDialog) {
-        AlertDialog(
-            onDismissRequest = { showZipDialog = false },
-            title = { Text("Create ZIP") },
-            text = {
-                Column {
-                    Text("${selectedPaths.size} item(s) will be zipped", fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedTextField(value = zipName, onValueChange = { zipName = it },
-                        label = { Text("ZIP file name") }, singleLine = true,
-                        modifier = Modifier.fillMaxWidth())
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val base = zipName.trim().ifEmpty { "archive" }
-                    val finalName = if (base.lowercase().endsWith(".zip")) base else "$base.zip"
-                    val outZip = getUniqueFile(File(currentPath), finalName)
-                    val sources = selectedPaths.map { File(it) }
-                    scope.launch {
-                        progressLabel = "Zipping..."; progressPercent = 0
-                        progressCancelled = false; progressHidden = false
-                        progressHideable = true; showProgress = true
-                        val r = withContext(Dispatchers.IO) {
-                            try {
-                                zipFiles(sources, outZip,
-                                    onProgress = { p -> progressPercent = p },
-                                    isCancelled = { progressCancelled })
-                                Result.success(Unit)
-                            } catch (e: Exception) { Result.failure(e) }
-                        }
-                        showProgress = false; progressHideable = false
-                        if (r.isSuccess) {
-                            files = loadFiles(currentPath, sortMode, showHidden)
-                            selectedPaths = emptySet()
-                            Toast.makeText(context, "ZIP created", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                    showZipDialog = false
-                }) { Text("Create") }
-            },
-            dismissButton = { TextButton(onClick = { showZipDialog = false }) { Text("Cancel") } }
+        ZipCreateDialog(
+            selectedPaths = selectedPaths,
+            currentPath = currentPath,
+            context = context,
+            onDismiss = { showZipDialog = false },
+            onCreated = {
+                files = loadFiles(currentPath, sortMode, showHidden)
+                selectedPaths = emptySet()
+            }
         )
     }
 
     if (showEncryptChoice) {
-        AlertDialog(
-            onDismissRequest = { showEncryptChoice = false },
-            title = { Text("Encrypt ${selectedPaths.size} items") },
-            text = {
-                Column {
-                    Text("How do you want to encrypt?", fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onBackground)
-                    Spacer(Modifier.height(12.dp))
-                    Row(Modifier.fillMaxWidth().clickable { onePasswordForAll = true }
-                        .padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = onePasswordForAll, onClick = { onePasswordForAll = true })
-                        Text("One password for all", fontSize = 15.sp,
-                            color = MaterialTheme.colorScheme.onBackground)
-                    }
-                    Row(Modifier.fillMaxWidth().clickable { onePasswordForAll = false }
-                        .padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = !onePasswordForAll, onClick = { onePasswordForAll = false })
-                        Text("Different password for each", fontSize = 15.sp,
-                            color = MaterialTheme.colorScheme.onBackground)
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingEncryptPaths = selectedPaths.toList()
-                    currentEncryptIndex = 0
-                    encryptPassword = ""; encryptPasswordConfirm = ""
-                    encryptFileName = false; encryptError = null
-                    showEncryptChoice = false; showEncryptDialog = true
-                }) { Text("Continue") }
-            },
-            dismissButton = { TextButton(onClick = { showEncryptChoice = false }) { Text("Cancel") } }
+        EncryptChoiceDialog(
+            selectedCount = selectedPaths.size,
+            onDismiss = { showEncryptChoice = false },
+            onContinue = { onePass ->
+                onePasswordForAll = onePass
+                pendingEncryptPaths = selectedPaths.toList()
+                currentEncryptIndex = 0
+                showEncryptChoice = false
+                showEncryptDialog = true
+            }
         )
     }
 
     if (showEncryptDialog) {
-        val total = pendingEncryptPaths.size
-        val isMulti = total > 1
-        val currentName = if (currentEncryptIndex < total)
-            File(pendingEncryptPaths[currentEncryptIndex]).name else ""
-
-        AlertDialog(
-            onDismissRequest = {
+        EncryptDialog(
+            pendingEncryptPaths = pendingEncryptPaths,
+            onePasswordForAll = onePasswordForAll,
+            currentEncryptIndex = currentEncryptIndex,
+            context = context,
+            onDismiss = {
                 showEncryptDialog = false
-                encryptPassword = ""; encryptPasswordConfirm = ""; encryptError = null
+                pendingEncryptPaths = emptyList()
+                currentEncryptIndex = 0
             },
-            title = {
-                Text(
-                    if (isMulti && !onePasswordForAll) "Encrypt file ${currentEncryptIndex + 1} of $total"
-                    else if (isMulti) "Encrypt $total items" else "Encrypt file"
-                )
+            onComplete = {
+                files = loadFiles(currentPath, sortMode, showHidden)
+                selectedPaths = emptySet()
+                pendingEncryptPaths = emptyList()
+                currentEncryptIndex = 0
             },
-            text = {
-                Column {
-                    if (isMulti && !onePasswordForAll) {
-                        Text(currentName, fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f), maxLines = 1)
-                        Spacer(Modifier.height(10.dp))
-                    }
-                    OutlinedTextField(
-                        value = encryptPassword,
-                        onValueChange = { encryptPassword = it; encryptError = null },
-                        label = { Text("Enter password") }, singleLine = true,
-                        visualTransformation = if (showEncryptPassword) VisualTransformation.None
-                        else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            IconButton(onClick = { showEncryptPassword = !showEncryptPassword }) {
-                                Icon(
-                                    imageVector = if (showEncryptPassword) Icons.Filled.VisibilityOff
-                                    else Icons.Filled.Visibility,
-                                    contentDescription = "Toggle"
-                                )
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = encryptPasswordConfirm,
-                        onValueChange = { encryptPasswordConfirm = it; encryptError = null },
-                        label = { Text("Re-enter password") }, singleLine = true,
-                        visualTransformation = if (showEncryptPassword) VisualTransformation.None
-                        else PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Row(Modifier.fillMaxWidth().clickable { encryptFileName = !encryptFileName },
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = encryptFileName, onCheckedChange = { encryptFileName = it })
-                        Text("Encrypt file name", fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.onBackground)
-                    }
-                    if (encryptError != null) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(encryptError!!, fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.error)
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (encryptPassword.isEmpty()) {
-                        encryptError = "Password cannot be empty"
-                        return@TextButton
-                    }
-                    if (encryptPassword != encryptPasswordConfirm) {
-                        encryptError = "Passwords do not match"
-                        return@TextButton
-                    }
-
-                    if (onePasswordForAll) {
-                        val allPaths = pendingEncryptPaths.toList()
-                        val pwd = encryptPassword
-                        val encName = encryptFileName
-                        scope.launch {
-                            progressLabel = "Encrypting..."
-                            progressPercent = 0
-                            progressCancelled = false
-                            progressHidden = false
-                            progressHideable = true
-                            showProgress = true
-
-                            val totalItems = allPaths.size.coerceAtLeast(1)
-                            var successCount = 0
-                            var failCount = 0
-
-                            withContext(Dispatchers.IO) {
-                                allPaths.forEachIndexed { i, path ->
-                                    if (progressCancelled) return@withContext
-                                    try {
-                                        val c = CryptoUtils.encryptPath(
-                                            source = File(path),
-                                            password = pwd,
-                                            encryptFileName = encName,
-                                            onProgress = { },
-                                            isCancelled = { progressCancelled }
-                                        )
-                                        successCount += c
-                                    } catch (e: Exception) {
-                                        failCount++
-                                    }
-                                    progressPercent = ((i + 1) * 100) / totalItems
-                                }
-                            }
-
-                            showProgress = false
-                            progressHideable = false
-                            files = loadFiles(currentPath, sortMode, showHidden)
-                            selectedPaths = emptySet()
-                            showEncryptDialog = false
-                            pendingEncryptPaths = emptyList()
-                            currentEncryptIndex = 0
-                            encryptPassword = ""
-                            encryptPasswordConfirm = ""
-                            encryptFileName = false
-                            encryptError = null
-
-                            val msg = if (failCount == 0)
-                                "$successCount file(s) encrypted"
-                            else
-                                "$successCount encrypted, $failCount failed"
-                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                        }
-                    } else {
-                        val pathTo = pendingEncryptPaths[currentEncryptIndex]
-                        val pwd = encryptPassword
-                        val encName = encryptFileName
-                        scope.launch {
-                            progressLabel = "Encrypting..."
-                            progressPercent = 0
-                            progressCancelled = false
-                            progressHidden = false
-                            progressHideable = true
-                            showProgress = true
-
-                            val r = withContext(Dispatchers.IO) {
-                                try {
-                                    CryptoUtils.encryptPath(
-                                        source = File(pathTo),
-                                        password = pwd,
-                                        encryptFileName = encName,
-                                        onProgress = { p -> progressPercent = p },
-                                        isCancelled = { progressCancelled }
-                                    )
-                                    Result.success(Unit)
-                                } catch (e: Exception) {
-                                    Result.failure(e)
-                                }
-                            }
-
-                            showProgress = false
-                            progressHideable = false
-
-                            if (r.isSuccess) {
-                                files = loadFiles(currentPath, sortMode, showHidden)
-                                if (currentEncryptIndex < total - 1) {
-                                    currentEncryptIndex++
-                                    encryptPassword = ""
-                                    encryptPasswordConfirm = ""
-                                    encryptError = null
-                                } else {
-                                    showEncryptDialog = false
-                                    pendingEncryptPaths = emptyList()
-                                    currentEncryptIndex = 0
-                                    selectedPaths = emptySet()
-                                    encryptPassword = ""
-                                    encryptPasswordConfirm = ""
-                                    encryptFileName = false
-                                    encryptError = null
-                                    Toast.makeText(context, "All files encrypted",
-                                        Toast.LENGTH_SHORT).show()
-                                }
-                            } else {
-                                encryptError = "Encryption failed"
-                            }
-                        }
-                    }
-                }) { Text("Encrypt") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showEncryptDialog = false
-                    encryptPassword = ""
-                    encryptPasswordConfirm = ""
-                    encryptError = null
-                }) { Text("Cancel") }
+            onNext = {
+                currentEncryptIndex++
             }
         )
     }
 
     if (showDecryptDialog) {
-        val targetFile = decryptTargetPath?.let { File(it) }
-        val locked = decryptLockRemaining > 0
-
-        AlertDialog(
-            onDismissRequest = {
-                showDecryptDialog = false
-                decryptPassword = ""; decryptError = null; decryptAttempts = 0
-            },
-            title = { Text("Decrypt file") },
-            text = {
-                Column {
-                    Text(targetFile?.name ?: "", fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f), maxLines = 1)
-                    Spacer(Modifier.height(10.dp))
-                    if (locked) {
-                        Text("Too many wrong attempts.", fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.error)
-                        Spacer(Modifier.height(6.dp))
-                        Text("Wait: ${decryptLockRemaining}s", fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.onBackground)
-                    } else {
-                        OutlinedTextField(
-                            value = decryptPassword,
-                            onValueChange = { decryptPassword = it; decryptError = null },
-                            label = { Text("Enter password") }, singleLine = true,
-                            visualTransformation = if (showDecryptPassword) VisualTransformation.None
-                            else PasswordVisualTransformation(),
-                            trailingIcon = {
-                                IconButton(onClick = { showDecryptPassword = !showDecryptPassword }) {
-                                    Icon(
-                                        imageVector = if (showDecryptPassword) Icons.Filled.VisibilityOff
-                                        else Icons.Filled.Visibility,
-                                        contentDescription = "Toggle"
-                                    )
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text("Attempt ${decryptAttempts + 1} of 3", fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f))
-                        if (decryptError != null) {
-                            Spacer(Modifier.height(8.dp))
-                            Text(decryptError!!, fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                if (!locked) {
-                    TextButton(onClick = {
-                        val path = decryptTargetPath ?: return@TextButton
-                        if (decryptPassword.isEmpty()) {
-                            decryptError = "Password cannot be empty"; return@TextButton
-                        }
-                        val pwd = decryptPassword
-                        scope.launch {
-                            progressLabel = "Decrypting..."; progressPercent = 0
-                            progressCancelled = false; progressHidden = false
-                            progressHideable = true; showProgress = true
-                            val r = withContext(Dispatchers.IO) {
-                                try {
-                                    CryptoUtils.decryptFile(
-                                        sourceFile = File(path), password = pwd,
-                                        onProgress = { p -> progressPercent = p },
-                                        isCancelled = { progressCancelled })
-                                    Result.success(Unit)
-                                } catch (e: Exception) { Result.failure(e) }
-                            }
-                            showProgress = false; progressHideable = false
-                            if (r.isSuccess) {
-                                files = loadFiles(currentPath, sortMode, showHidden)
-                                selectedPaths = emptySet()
-                                showDecryptDialog = false
-                                decryptPassword = ""; decryptError = null; decryptAttempts = 0
-                                Toast.makeText(context, "Decryption complete", Toast.LENGTH_SHORT).show()
-                            } else {
-                                decryptAttempts++
-                                decryptPassword = ""
-                                if (decryptAttempts >= 3) {
-                                    decryptLockUntil = System.currentTimeMillis() + 30_000L
-                                    decryptError = null
-                                } else decryptError = "Wrong password"
-                            }
-                        }
-                    }) { Text("Decrypt") }
-                } else {
-                    TextButton(onClick = {
-                        showDecryptDialog = false
-                        decryptPassword = ""; decryptError = null
-                    }) { Text("Close") }
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
+        decryptTargetPath?.let { path ->
+            DecryptDialog(
+                targetPath = path,
+                context = context,
+                onDismiss = {
                     showDecryptDialog = false
-                    decryptPassword = ""; decryptError = null; decryptAttempts = 0
-                }) { Text("Cancel") }
-            }
-        )
-    }
-
-    if (showProgress && !progressHidden) {
-        AlertDialog(
-            onDismissRequest = { },
-            title = { Text(progressLabel) },
-            text = {
-                Column {
-                    LinearProgressIndicator(
-                        progress = { progressPercent / 100f },
-                        modifier = Modifier.fillMaxWidth().height(10.dp)
-                            .clip(RoundedCornerShape(5.dp)),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Text("$progressPercent%", fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onBackground)
+                    decryptTargetPath = null
+                },
+                onDecrypted = {
+                    files = loadFiles(currentPath, sortMode, showHidden)
+                    selectedPaths = emptySet()
                 }
-            },
-            confirmButton = {
-                if (progressHideable) {
-                    TextButton(onClick = { progressHidden = true }) { Text("Hide") }
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { progressCancelled = true }) { Text("Cancel") }
-            }
-        )
-    }
-
-    if (showProgress && progressHidden) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-            Card(
-                modifier = Modifier.padding(20.dp).clip(RoundedCornerShape(12.dp))
-                    .clickable { progressHidden = false },
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primary)
-            ) {
-                Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary)
-                    Spacer(Modifier.width(10.dp))
-                    Text("$progressPercent% — tap", fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onPrimary)
-                }
-            }
+            )
         }
     }
 
-    if (appBackupRunning) {
-        AlertDialog(
-            onDismissRequest = { },
-            title = { Text("Backing up APK...") },
-            text = {
-                Column {
-                    LinearProgressIndicator(
-                        progress = { appBackupProgress / 100f },
-                        modifier = Modifier.fillMaxWidth().height(10.dp)
-                            .clip(RoundedCornerShape(5.dp)),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Text("$appBackupProgress%", fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onBackground)
-                }
-            },
-            confirmButton = { }
+    if (showDecryptMultiDialog) {
+        DecryptMultiDialog(
+            selectedPaths = selectedPaths,
+            context = context,
+            onDismiss = { showDecryptMultiDialog = false },
+            onDecrypted = {
+                files = loadFiles(currentPath, sortMode, showHidden)
+                selectedPaths = emptySet()
+            }
         )
     }
 
     if (showShredDialog) {
-        AlertDialog(
-            onDismissRequest = { if (!isShredding) showShredDialog = false },
-            title = { Text("Shred ${selectedPaths.size} item(s)?") },
-            text = {
-                Column {
-                    Text("Files will be permanently destroyed with 3-pass overwrite.",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onBackground)
-                    Spacer(Modifier.height(8.dp))
-                    Text("This cannot be undone. No recovery possible.",
-                        fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.error)
-
-                    if (isShredding) {
-                        Spacer(Modifier.height(16.dp))
-                        LinearProgressIndicator(
-                            progress = { shredProgress / 100f },
-                            modifier = Modifier.fillMaxWidth().height(8.dp)
-                                .clip(RoundedCornerShape(4.dp)),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text("$shredProgress%", fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onBackground)
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !isShredding,
-                    onClick = {
-                        val paths = selectedPaths.toList()
-                        scope.launch {
-                            isShredding = true
-                            shredProgress = 0
-                            val total = paths.size.coerceAtLeast(1)
-                            withContext(Dispatchers.IO) {
-                                paths.forEachIndexed { i, path ->
-                                    FileShredder.shred(
-                                        file = File(path),
-                                        onProgress = { p ->
-                                            shredProgress = ((i * 100) + p) / total
-                                        },
-                                        isCancelled = { false }
-                                    )
-                                }
-                            }
-                            shredProgress = 100
-                            isShredding = false
-                            selectedPaths = emptySet()
-                            files = loadFiles(currentPath, sortMode, showHidden)
-                            showShredDialog = false
-                            Toast.makeText(context, "Files shredded permanently",
-                                Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                ) { Text("Shred") }
-            },
-            dismissButton = {
-                TextButton(
-                    enabled = !isShredding,
-                    onClick = { showShredDialog = false }
-                ) { Text("Cancel") }
+        ShredConfirmDialog(
+            selectedPaths = selectedPaths,
+            context = context,
+            onDismiss = { showShredDialog = false },
+            onShredded = {
+                selectedPaths = emptySet()
+                files = loadFiles(currentPath, sortMode, showHidden)
             }
         )
     }
 
-    if (showDecryptMultiDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                if (!decryptMultiRunning) {
-                    showDecryptMultiDialog = false
-                    decryptMultiPassword = ""
-                    decryptMultiError = null
-                }
-            },
-            title = { Text("Decrypt ${selectedPaths.size} file(s)") },
-            text = {
-                Column {
-                    Text("All files will be decrypted with the same password.",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = decryptMultiPassword,
-                        onValueChange = { decryptMultiPassword = it; decryptMultiError = null },
-                        label = { Text("Enter password") },
-                        singleLine = true,
-                        enabled = !decryptMultiRunning,
-                        visualTransformation = if (showDecryptMultiPassword)
-                            VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            IconButton(onClick = { showDecryptMultiPassword = !showDecryptMultiPassword }) {
-                                Icon(
-                                    imageVector = if (showDecryptMultiPassword) Icons.Filled.VisibilityOff
-                                    else Icons.Filled.Visibility,
-                                    contentDescription = "Toggle"
-                                )
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    if (decryptMultiError != null) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(decryptMultiError!!, fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.error)
-                    }
-                    if (decryptMultiRunning) {
-                        Spacer(Modifier.height(14.dp))
-                        LinearProgressIndicator(
-                            progress = { decryptMultiProgress / 100f },
-                            modifier = Modifier.fillMaxWidth().height(8.dp)
-                                .clip(RoundedCornerShape(4.dp)),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text("$decryptMultiProgress%", fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onBackground)
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !decryptMultiRunning,
-                    onClick = {
-                        if (decryptMultiPassword.isEmpty()) {
-                            decryptMultiError = "Password cannot be empty"
-                            return@TextButton
-                        }
-                        val paths = selectedPaths.toList()
-                        val pwd = decryptMultiPassword
-                        scope.launch {
-                            decryptMultiRunning = true
-                            decryptMultiProgress = 0
-                            val totalItems = paths.size.coerceAtLeast(1)
-                            var successCount = 0
-                            var failCount = 0
-
-                            withContext(Dispatchers.IO) {
-                                paths.forEachIndexed { i, path ->
-                                    try {
-                                        val c = CryptoUtils.decryptPath(
-                                            source = File(path),
-                                            password = pwd,
-                                            onProgress = { },
-                                            isCancelled = { false }
-                                        )
-                                        successCount += c
-                                    } catch (e: Exception) {
-                                        failCount++
-                                    }
-                                    decryptMultiProgress = ((i + 1) * 100) / totalItems
-                                }
-                            }
-
-                            decryptMultiRunning = false
-                            files = loadFiles(currentPath, sortMode, showHidden)
-                            selectedPaths = emptySet()
-                            showDecryptMultiDialog = false
-                            decryptMultiPassword = ""
-                            decryptMultiError = null
-
-                            val msg = if (failCount == 0)
-                                "$successCount file(s) decrypted"
-                            else
-                                "$successCount decrypted, $failCount failed"
-                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                        }
-                    }
-                ) { Text("Decrypt") }
-            },
-            dismissButton = {
-                TextButton(
-                    enabled = !decryptMultiRunning,
-                    onClick = {
-                        showDecryptMultiDialog = false
-                        decryptMultiPassword = ""
-                        decryptMultiError = null
-                    }
-                ) { Text("Cancel") }
-            }
+    if (showProgress) {
+        ProgressDialog(
+            progressLabel = progressLabel,
+            progressPercent = progressPercent,
+            progressHideable = progressHideable,
+            progressHidden = progressHidden,
+            onHide = { progressHidden = true },
+            onCancel = { progressCancelled = true },
+            onUnhide = { progressHidden = false }
         )
+    }
+
+    if (appBackupRunning) {
+        ApkBackupDialog(progress = appBackupProgress)
     }
 
     // ===== Global Home Button handler =====
@@ -2480,7 +1856,6 @@ fun FileExplorerScreen(
         }
     }
 
-    // Home button — har screen pe visible (home chhod ke)
     val showHomeButton = currentScreen != "home" || activeCategory != null ||
             isSearching || showSettings || showRecycleBin || showToolbox ||
             showVault || showWifiTransfer || showSecureNotes || showNetworkStorage ||
@@ -2489,6 +1864,7 @@ fun FileExplorerScreen(
 
     HomeFloatingButton(visible = showHomeButton)
 }
+
 @Composable
 fun ModernSearchScreen(
     query: String,
@@ -2644,11 +2020,8 @@ fun ModernSearchScreen(
                     color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(Modifier.width(8.dp))
-                Text(
-                    text = "Searching...",
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                )
+                Text("Searching...", fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
             } else {
                 Text(
                     text = when {
@@ -2682,44 +2055,26 @@ fun ModernSearchScreen(
 
         when {
             query.length >= 2 && results.isEmpty() && !isRunning -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Filled.Search,
-                            contentDescription = null,
+                        Icon(Icons.Filled.Search, null,
                             tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
-                            modifier = Modifier.size(64.dp)
-                        )
+                            modifier = Modifier.size(64.dp))
                         Spacer(Modifier.height(12.dp))
-                        Text(
-                            text = "No files match \"$query\"",
-                            fontSize = 15.sp,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                        )
+                        Text("No files match \"$query\"", fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
                     }
                 }
             }
             query.isEmpty() -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Filled.FolderOpen,
-                            contentDescription = null,
+                        Icon(Icons.Filled.FolderOpen, null,
                             tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
-                            modifier = Modifier.size(64.dp)
-                        )
+                            modifier = Modifier.size(64.dp))
                         Spacer(Modifier.height(12.dp))
-                        Text(
-                            text = "Search across all your storage",
-                            fontSize = 15.sp,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                        )
+                        Text("Search across all your storage", fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
                     }
                 }
             }
@@ -2730,8 +2085,7 @@ fun ModernSearchScreen(
                         val isEncrypted = file.name.endsWith(CryptoUtils.VS_EXTENSION)
                         val iconBg = if (isFolder || isEncrypted)
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                        else
-                            MaterialTheme.colorScheme.surfaceVariant
+                        else MaterialTheme.colorScheme.surfaceVariant
                         val iconVector = when {
                             isEncrypted -> Icons.Filled.Lock
                             isFolder -> Icons.Filled.Folder
@@ -2756,38 +2110,26 @@ fun ModernSearchScreen(
                                     .background(iconBg),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = iconVector,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
+                                Icon(iconVector, null,
+                                    tint = MaterialTheme.colorScheme.primary)
                             }
 
                             Spacer(modifier = Modifier.width(14.dp))
 
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = file.name,
-                                    fontSize = 15.sp,
+                                Text(file.name, fontSize = 15.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.onBackground,
-                                    maxLines = 1
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = file.parent ?: "",
-                                    fontSize = 11.sp,
+                                    maxLines = 1)
+                                Spacer(Modifier.height(2.dp))
+                                Text(file.parent ?: "", fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                                    maxLines = 1
-                                )
+                                    maxLines = 1)
                             }
 
                             if (!isFolder) {
-                                Text(
-                                    text = formatSize(file.length()),
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                                )
+                                Text(formatSize(file.length()), fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
                             }
                         }
                     }
@@ -2822,3 +2164,5 @@ fun FilterChipSmall(
         )
     }
 }
+
+

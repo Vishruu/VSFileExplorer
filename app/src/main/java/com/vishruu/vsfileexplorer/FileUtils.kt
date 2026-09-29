@@ -339,3 +339,65 @@ fun pasteFiles(clipboard: ClipboardData, destFolder: File): Int {
     }
     return count
 }
+
+suspend fun createFolderSafely(
+    context: Context,
+    parent: File,
+    folderName: String
+): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    try {
+        if (!parent.exists()) return@withContext "Parent folder not found"
+        if (!parent.isDirectory) return@withContext "Parent is not a folder"
+        if (!parent.canWrite()) return@withContext "No write permission. Enable 'All files access'"
+
+        val cleanName = folderName.replace("/", "_").trim()
+        if (cleanName.isEmpty()) return@withContext "Invalid folder name"
+
+        val target = File(parent, cleanName)
+        if (target.exists()) return@withContext "Folder '$cleanName' already exists"
+
+        val ok = target.mkdirs()
+        if (!ok || !target.exists()) return@withContext "Failed: storage may be read-only"
+
+        try {
+            android.media.MediaScannerConnection.scanFile(
+                context, arrayOf(target.absolutePath), null, null
+            )
+        } catch (_: Exception) {}
+
+        null
+    } catch (e: Exception) {
+        "Error: ${e.message ?: "Unknown"}"
+    }
+}
+
+suspend fun createFileSafely(
+    context: Context,
+    parent: File,
+    baseName: String
+): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    try {
+        if (!parent.exists()) return@withContext "Parent folder not found"
+        if (!parent.isDirectory) return@withContext "Parent is not a folder"
+        if (!parent.canWrite()) return@withContext "No write permission. Enable 'All files access'"
+
+        val target = getUniqueFile(parent, baseName)
+
+        val ok = try {
+            target.createNewFile()
+        } catch (e: Exception) {
+            return@withContext "Error: ${e.message ?: "IOException"}"
+        }
+        if (!ok || !target.exists()) return@withContext "Failed: cannot create file"
+
+        try {
+            android.media.MediaScannerConnection.scanFile(
+                context, arrayOf(target.absolutePath), null, null
+            )
+        } catch (_: Exception) {}
+
+        null
+    } catch (e: Exception) {
+        "Error: ${e.message ?: "Unknown"}"
+    }
+}
