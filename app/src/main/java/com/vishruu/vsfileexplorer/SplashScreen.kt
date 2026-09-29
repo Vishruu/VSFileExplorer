@@ -64,15 +64,15 @@ fun SplashScreen(onFinished: () -> Unit) {
     )
 
     LaunchedEffect(Unit) {
-        iconAlpha.animateTo(1f, tween(600))
-        iconScale.animateTo(1f, tween(600))
-        glowAlpha.animateTo(1f, tween(400))
-        titleAlpha.animateTo(1f, tween(500))
-        delay(150)
-        subtitleAlpha.animateTo(1f, tween(500))
-        delay(150)
-        versionAlpha.animateTo(1f, tween(500))
-        delay(700)
+        iconAlpha.animateTo(1f, tween(400))
+        iconScale.animateTo(1f, tween(400))
+        glowAlpha.animateTo(1f, tween(300))
+        titleAlpha.animateTo(1f, tween(300))
+        delay(80)
+        subtitleAlpha.animateTo(1f, tween(300))
+        delay(80)
+        versionAlpha.animateTo(1f, tween(300))
+        delay(200)
         onFinished()
     }
 

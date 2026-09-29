@@ -270,7 +270,11 @@ fun scanFolders(
 
 // ===== FAST analyzer using MediaStore (1 second) =====
 
-fun scanStorageAnalyzerFast(context: Context, root: File): AnalyzerResult {
+fun scanStorageAnalyzerFast(
+    context: Context,
+    root: File,
+    onScanning: (String) -> Unit = {}
+): AnalyzerResult {
     val imageExt = setOf("jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif")
     val videoExt = setOf("mp4", "mkv", "avi", "mov", "webm", "3gp", "flv", "m4v")
     val audioExt = setOf("mp3", "wav", "aac", "ogg", "flac", "m4a", "opus", "wma")
@@ -315,6 +319,7 @@ fun scanStorageAnalyzerFast(context: Context, root: File): AnalyzerResult {
 
     var cursorOk = false
     try {
+        onScanning("Reading MediaStore...")
         context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
             cursorOk = true
             val dataIdx = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATA)
@@ -322,6 +327,7 @@ fun scanStorageAnalyzerFast(context: Context, root: File): AnalyzerResult {
             val nameIdx = cursor.getColumnIndex(MediaStore.Files.FileColumns.DISPLAY_NAME)
             if (dataIdx < 0 || sizeIdx < 0) return@use
 
+            var processed = 0
             while (cursor.moveToNext()) {
                 val path = cursor.getString(dataIdx) ?: continue
                 if (path.isEmpty()) continue
@@ -330,6 +336,12 @@ fun scanStorageAnalyzerFast(context: Context, root: File): AnalyzerResult {
                 val size = cursor.getLong(sizeIdx)
                 val name = if (nameIdx >= 0) cursor.getString(nameIdx) ?: "" else ""
                 if (name.startsWith(".")) continue
+
+                // Update progress every 100 files
+                processed++
+                if (processed % 100 == 0) {
+                    onScanning(path)
+                }
 
                 val file = File(path)
 
@@ -390,7 +402,7 @@ fun scanStorageAnalyzerFast(context: Context, root: File): AnalyzerResult {
     }
 
     if (!cursorOk) {
-        return scanStorageAnalyzer(root)
+        return scanStorageAnalyzer(root, onScanning)
     }
 
     val cumulativeSizes = HashMap<String, LongArray>(folderDirect)
@@ -448,6 +460,8 @@ fun scanStorageAnalyzerFast(context: Context, root: File): AnalyzerResult {
     val free = root.freeSpace
     val used = total - free
 
+    onScanning("Finalizing...")
+
     return AnalyzerResult(
         categories = categories,
         largestFiles = topFiles,
@@ -462,7 +476,10 @@ fun scanStorageAnalyzerFast(context: Context, root: File): AnalyzerResult {
 }
 
 // Fallback (old file-traversal method)
-fun scanStorageAnalyzer(root: File): AnalyzerResult {
+fun scanStorageAnalyzer(
+    root: File,
+    onScanning: (String) -> Unit = {}
+): AnalyzerResult {
     val imageExt = setOf("jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif")
     val videoExt = setOf("mp4", "mkv", "avi", "mov", "webm", "3gp", "flv", "m4v")
     val audioExt = setOf("mp3", "wav", "aac", "ogg", "flac", "m4a", "opus", "wma")
@@ -498,6 +515,7 @@ fun scanStorageAnalyzer(root: File): AnalyzerResult {
 
     while (queue.isNotEmpty()) {
         val current = queue.removeFirst()
+        onScanning(current.absolutePath)
         if (isVaultPath(current.absolutePath)) continue
         val children = try { current.listFiles() } catch (e: Exception) { null } ?: continue
         var folderBytes = 0L

@@ -1,5 +1,6 @@
 package com.vishruu.vsfileexplorer
 
+import kotlinx.coroutines.launch
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -105,7 +106,6 @@ import com.vishruu.vsfileexplorer.ui.theme.DefaultFont
 import com.vishruu.vsfileexplorer.ui.theme.VSFileExplorerTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -163,9 +163,19 @@ fun chipsForCategory(catLabel: String): List<Pair<String, List<String>>> {
 class MainActivity : androidx.fragment.app.FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        com.google.android.gms.ads.MobileAds.initialize(this) { }
         ShortcutRouter.handleIntent(intent)
         setContent { AppRoot() }
+        // Initialize ads AFTER UI is fully rendered (background thread)
+        Thread {
+            try {
+                Thread.sleep(3000)
+                runOnUiThread {
+                    try {
+                        com.google.android.gms.ads.MobileAds.initialize(this) { }
+                    } catch (_: Exception) {}
+                }
+            } catch (_: Exception) {}
+        }.start()
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -316,6 +326,7 @@ fun FileExplorerScreen(
 
     var showAnalyzer by remember { mutableStateOf(false) }
     var isAnalyzerRunning by remember { mutableStateOf(false) }
+    var analyzerScanningText by remember { mutableStateOf("") }
     var analyzerCategories by remember { mutableStateOf<List<StorageCategory>>(emptyList()) }
     var analyzerLargestFiles by remember { mutableStateOf<List<File>>(emptyList()) }
     var analyzerTotalUsed by remember { mutableStateOf(0L) }
@@ -378,20 +389,24 @@ fun FileExplorerScreen(
 
     val lifecycleOwnerForPermission = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwnerForPermission) {
-        val checkPermission: () -> Unit = {
-            hasPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                Environment.isExternalStorageManager()
-            } else {
-                ContextCompat.checkSelfPermission(
-                    context, Manifest.permission.READ_EXTERNAL_STORAGE
-                ) == PackageManager.PERMISSION_GRANTED
-            }
-            permissionChecked = true
+        // ✅ Permission check — synchronous, fast
+        hasPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.READ_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
         }
-        checkPermission()
+        permissionChecked = true
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                checkPermission()
+                hasPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    Environment.isExternalStorageManager()
+                } else {
+                    ContextCompat.checkSelfPermission(
+                        context, Manifest.permission.READ_EXTERNAL_STORAGE
+                    ) == PackageManager.PERMISSION_GRANTED
+                }
                 if (hasPermission && files.isEmpty()) {
                     files = loadFiles(currentPath, sortMode, showHidden)
                 }
@@ -403,8 +418,8 @@ fun FileExplorerScreen(
         }
     }
 
-    LaunchedEffect(sortMode, showHidden) {
-        if (hasPermission) {
+    LaunchedEffect(sortMode, showHidden, currentScreen) {
+        if (hasPermission && currentScreen == "browse") {
             files = withContext(Dispatchers.IO) {
                 loadFiles(currentPath, sortMode, showHidden)
             }
@@ -493,7 +508,16 @@ fun FileExplorerScreen(
     LaunchedEffect(showAnalyzer) {
         if (showAnalyzer) {
             isAnalyzerRunning = true
-            val r = withContext(Dispatchers.IO) { scanStorageAnalyzerFast(context, File(rootPath)) }
+            analyzerScanningText = "Starting..."
+            val r = withContext(Dispatchers.IO) {
+                scanStorageAnalyzerFast(
+                    context = context,
+                    root = File(rootPath),
+                    onScanning = { path ->
+                        analyzerScanningText = path
+                    }
+                )
+            }
             analyzerCategories = r.categories
             analyzerLargestFiles = r.largestFiles
             analyzerTotalUsed = r.usedBytes
@@ -898,6 +922,7 @@ fun FileExplorerScreen(
             StorageAnalyzerScreen(
                 context = context,
                 isRunning = isAnalyzerRunning,
+                scanningText = analyzerScanningText,
                 categories = analyzerCategories,
                 largestFiles = analyzerLargestFiles,
                 usedBytes = analyzerTotalUsed,

@@ -85,6 +85,7 @@ fun getFolderSizeRecursive(folder: File): Pair<Long, Int> {
 fun StorageAnalyzerScreen(
     context: Context,
     isRunning: Boolean,
+    scanningText: String = "",
     categories: List<StorageCategory>,
     largestFiles: List<File>,
     usedBytes: Long,
@@ -466,6 +467,17 @@ fun StorageAnalyzerScreen(
                 }
             }
             return@Column
+        }
+
+        if (scanningText.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                scanningText,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                maxLines = 1,
+                modifier = Modifier.padding(horizontal = 24.dp)
+            )
         }
 
         // Total card
