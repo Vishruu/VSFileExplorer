@@ -270,6 +270,25 @@ object SettingsManager {
     fun setThemeMode(context: Context, mode: String) {
         prefs(context).edit().putString(KEY_THEME_MODE, mode).apply()
     }
+
+    // ========== CLOUD BACKUP ==========
+    private const val KEY_LAST_BACKUP = "last_backup_time"
+    private const val KEY_AUTO_BACKUP = "auto_backup_enabled"
+
+    fun getLastBackupTime(context: Context): Long =
+        prefs(context).getLong(KEY_LAST_BACKUP, 0L)
+
+    fun setLastBackupTime(context: Context, time: Long) {
+        prefs(context).edit().putLong(KEY_LAST_BACKUP, time).apply()
+    }
+
+    fun isAutoBackupEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_AUTO_BACKUP, false)
+
+    fun setAutoBackupEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_AUTO_BACKUP, enabled).apply()
+    }
+
 }
 
 

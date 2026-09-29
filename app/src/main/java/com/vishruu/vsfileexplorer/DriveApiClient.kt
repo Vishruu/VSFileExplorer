@@ -201,4 +201,106 @@ object DriveApiClient {
             false
         }
     }
+
+    /**
+     * Search files with custom query.
+     * Query format: Drive API query syntax
+     * Example: "name = 'backup.json' and trashed = false"
+     */
+    suspend fun searchFiles(token: String, query: String): List<DriveFile> =
+        withContext(Dispatchers.IO) {
+            try {
+                val q = encode(query)
+                val fields = encode("files(id,name,mimeType,size,modifiedTime)")
+                val url = "$BASE/files?q=$q&fields=$fields&pageSize=1000"
+                val conn = URL(url).openConnection() as HttpURLConnection
+                conn.setRequestProperty("Authorization", "Bearer $token")
+                conn.connectTimeout = 20000
+                conn.readTimeout = 20000
+
+                if (conn.responseCode != 200) return@withContext emptyList()
+
+                val body = conn.inputStream.bufferedReader().use(BufferedReader::readText)
+                val json = JSONObject(body)
+                val arr = json.optJSONArray("files") ?: return@withContext emptyList()
+                val result = mutableListOf<DriveFile>()
+                for (i in 0 until arr.length()) {
+                    val o = arr.getJSONObject(i)
+                    result.add(
+                        DriveFile(
+                            id = o.getString("id"),
+                            name = o.getString("name"),
+                            mimeType = o.optString("mimeType", ""),
+                            size = o.optString("size", "0").toLongOrNull() ?: 0L,
+                            modifiedTime = parseTime(o.optString("modifiedTime", ""))
+                        )
+                    )
+                }
+                result
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+
+    /**
+     * Upload file with custom name (not using local file name).
+     * Returns uploaded file ID, or null on failure.
+     */
+    suspend fun uploadFileWithName(
+        context: Context,
+        token: String,
+        localFile: File,
+        fileName: String,
+        parentId: String = "root",
+        onProgress: (Int) -> Unit = {}
+    ): String? = withContext(Dispatchers.IO) {
+        try {
+            val boundary = "----VSBoundary${System.currentTimeMillis()}"
+            val metadata = JSONObject().apply {
+                put("name", fileName)
+                put("parents", org.json.JSONArray().put(parentId))
+            }.toString()
+
+            val url = URL("$UPLOAD/files?uploadType=multipart&fields=id,name")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.doOutput = true
+            conn.setRequestProperty("Authorization", "Bearer $token")
+            conn.setRequestProperty("Content-Type", "multipart/related; boundary=$boundary")
+            conn.connectTimeout = 30000
+            conn.readTimeout = 60000
+
+            conn.outputStream.use { out ->
+                out.write("--$boundary\r\n".toByteArray())
+                out.write("Content-Type: application/json; charset=UTF-8\r\n\r\n".toByteArray())
+                out.write(metadata.toByteArray())
+                out.write("\r\n".toByteArray())
+
+                out.write("--$boundary\r\n".toByteArray())
+                out.write("Content-Type: application/octet-stream\r\n\r\n".toByteArray())
+
+                val total = localFile.length()
+                var sent = 0L
+                localFile.inputStream().use { input ->
+                    val buf = ByteArray(8192)
+                    var n: Int
+                    while (input.read(buf).also { n = it } > 0) {
+                        out.write(buf, 0, n)
+                        sent += n
+                        if (total > 0) onProgress(((sent * 100) / total).toInt())
+                    }
+                }
+                out.write("\r\n--$boundary--\r\n".toByteArray())
+            }
+
+            if (conn.responseCode !in 200..299) return@withContext null
+
+            val responseBody = conn.inputStream.bufferedReader().use(BufferedReader::readText)
+            val json = JSONObject(responseBody)
+            json.optString("id", "").takeIf { it.isNotEmpty() }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
 }

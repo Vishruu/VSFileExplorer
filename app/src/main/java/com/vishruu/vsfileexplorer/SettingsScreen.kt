@@ -24,6 +24,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CleaningServices
@@ -80,6 +82,8 @@ import com.vishruu.vsfileexplorer.ui.theme.FontOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Logout
 
 @Composable
 fun SettingsScreen(
@@ -114,6 +118,7 @@ fun SettingsScreen(
     var recycleAutoDays by remember { mutableIntStateOf(SettingsManager.getRecycleAutoDeleteDays(context)) }
     var thumbQuality by remember { mutableIntStateOf(SettingsManager.getThumbQuality(context)) }
     var debugMode by remember { mutableStateOf(SettingsManager.isDebugMode(context)) }
+    var autoBackupEnabled by remember { mutableStateOf(SettingsManager.isAutoBackupEnabled(context)) }
 
     // ===== Dialog states =====
     var showLangDialog by remember { mutableStateOf(false) }
@@ -138,6 +143,26 @@ fun SettingsScreen(
     var isRestoreRunning by remember { mutableStateOf(false) }
     var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
     var backupStatusMsg by remember { mutableStateOf<String?>(null) }
+    var driveSignedIn by remember { mutableStateOf(DriveAuthManager.isSignedIn(context)) }
+    var driveEmail by remember { mutableStateOf(DriveAuthManager.getEmail(context)) }
+
+    val driveSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val task = com.google.android.gms.auth.api.signin.GoogleSignIn
+                .getSignedInAccountFromIntent(result.data)
+            try {
+                val account = task.getResult(Exception::class.java)
+                DriveAuthManager.saveEmail(context, account?.email)
+                driveEmail = account?.email
+                driveSignedIn = true
+                backupStatusMsg = "Signed in as ${account?.email}"
+            } catch (e: Exception) {
+                backupStatusMsg = "Sign-in failed: ${e.message}"
+            }
+        }
+    }
 
     val scope = rememberCoroutineScope()
 
@@ -488,6 +513,101 @@ fun SettingsScreen(
                 Toast.makeText(context, "VS File Explorer — by Vishruu",
                     Toast.LENGTH_SHORT).show()
             })
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // ===== GOOGLE ACCOUNT =====
+        SectionHeader("GOOGLE ACCOUNT")
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (driveSignedIn && driveEmail != null) {
+            SettingsItem(
+                icon = Icons.Filled.AccountCircle,
+                title = "Google Drive",
+                subtitle = driveEmail!!,
+                onClick = { }
+            )
+            SettingsItem(
+                icon = Icons.Filled.Logout,
+                title = "Sign Out",
+                subtitle = "Disconnect Google Drive",
+                onClick = {
+                    DriveAuthManager.signOut(context)
+                    driveSignedIn = false
+                    driveEmail = null
+                    backupStatusMsg = "Signed out from Google Drive"
+                }
+            )
+        } else {
+            SettingsItem(
+                icon = Icons.Filled.AccountCircle,
+                title = "Sign in to Google Drive",
+                subtitle = "Required for Cloud Storage & Backup",
+                onClick = {
+                    val intent = DriveAuthManager.getClient(context).signInIntent
+                    driveSignInLauncher.launch(intent)
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // ===== CLOUD BACKUP =====
+        SectionHeader("CLOUD BACKUP")
+        Spacer(modifier = Modifier.height(8.dp))
+
+        SettingsItem(
+            icon = Icons.Filled.CloudUpload,
+            title = if (isBackupRunning) "Backing up..." else "Backup to Drive",
+            subtitle = if (isBackupRunning) "Please wait..."
+                       else "Save settings, bookmarks & recycle bin",
+            onClick = {
+                if (!isBackupRunning && !isRestoreRunning) {
+                    if (!DriveAuthManager.isSignedIn(context)) {
+                        backupStatusMsg = "Please sign in to Google Drive first.\n\nOpen Drawer → Cloud Storage → Sign in."
+                    } else {
+                        scope.launch {
+                            isBackupRunning = true
+                            val err = CloudBackupManager.backupToDrive(context)
+                            isBackupRunning = false
+                            backupStatusMsg = if (err == null)
+                                "Backup successful!\n\nSettings, bookmarks, and recycle bin saved to Google Drive."
+                            else "Backup failed:\n\n$err"
+                        }
+                    }
+                }
+            }
+        )
+
+        SettingsItem(
+            icon = Icons.Filled.CloudDownload,
+            title = if (isRestoreRunning) "Restoring..." else "Restore from Drive",
+            subtitle = if (isRestoreRunning) "Please wait..."
+                       else "Download latest backup & apply",
+            onClick = {
+                if (!isBackupRunning && !isRestoreRunning) {
+                    scope.launch {
+                        isRestoreRunning = true
+                        val err = CloudBackupManager.restoreFromDrive(context)
+                        isRestoreRunning = false
+                        backupStatusMsg = if (err == null)
+                            "Restore successful!\n\nRestart the app to apply all settings."
+                        else "Restore failed:\n\n$err"
+                    }
+                }
+            }
+        )
+
+        SettingsToggle(
+            icon = Icons.Filled.Refresh,
+            title = "Weekly Auto-Backup",
+            subtitle = if (autoBackupEnabled) "Enabled" else "Disabled",
+            checked = autoBackupEnabled,
+            onCheckedChange = {
+                autoBackupEnabled = it
+                SettingsManager.setAutoBackupEnabled(context, it)
+            }
+        )
 
         Spacer(modifier = Modifier.height(20.dp))
 

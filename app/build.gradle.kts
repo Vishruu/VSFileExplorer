@@ -78,6 +78,7 @@ dependencies {
     implementation("androidx.fragment:fragment-ktx:1.6.2")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+    implementation("net.lingala.zip4j:zip4j:2.11.5")
     implementation("com.google.android.gms:play-services-auth:21.2.0")
 
     testImplementation(libs.junit)

@@ -240,7 +240,11 @@ fun ZipCreateDialog(
     currentPath: String,
     context: Context,
     onDismiss: () -> Unit,
-    onCreated: () -> Unit
+    onCreated: () -> Unit,
+    onZipStart: (String) -> Unit,
+    onZipProgress: (Int) -> Unit,
+    onZipComplete: () -> Unit,
+    onHide: () -> Unit
 ) {
     var zipName by remember {
         val firstName = selectedPaths.firstOrNull()?.let {
@@ -248,6 +252,11 @@ fun ZipCreateDialog(
         } ?: "archive"
         mutableStateOf(if (selectedPaths.size == 1) firstName else "archive")
     }
+    var password by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var usePassword by remember { mutableStateOf(false) }
+    var showPassword by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
     var showProgress by remember { mutableStateOf(false) }
     var progressPercent by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
@@ -265,12 +274,63 @@ fun ZipCreateDialog(
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = zipName,
-                    onValueChange = { zipName = it },
+                    onValueChange = { zipName = it; error = null },
                     label = { Text("ZIP file name") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !showProgress
                 )
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    Modifier.fillMaxWidth().clickable { usePassword = !usePassword },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = usePassword,
+                        onCheckedChange = { usePassword = it; error = null },
+                        enabled = !showProgress
+                    )
+                    Text("Password protect (AES-256)", fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onBackground)
+                }
+                if (usePassword) {
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it; error = null },
+                        label = { Text("Password") },
+                        singleLine = true,
+                        enabled = !showProgress,
+                        visualTransformation = if (showPassword) VisualTransformation.None
+                        else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { showPassword = !showPassword }) {
+                                Icon(
+                                    imageVector = if (showPassword) Icons.Filled.VisibilityOff
+                                    else Icons.Filled.Visibility,
+                                    contentDescription = "Toggle"
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = confirmPassword,
+                        onValueChange = { confirmPassword = it; error = null },
+                        label = { Text("Confirm password") },
+                        singleLine = true,
+                        enabled = !showProgress,
+                        visualTransformation = if (showPassword) VisualTransformation.None
+                        else PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                if (error != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(error!!, fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.error)
+                }
                 if (showProgress) {
                     Spacer(Modifier.height(12.dp))
                     LinearProgressIndicator(
@@ -279,48 +339,163 @@ fun ZipCreateDialog(
                         color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(Modifier.height(6.dp))
-                    Text("$progressPercent%", fontSize = 13.sp)
+                    Text("Compressing… $progressPercent%", fontSize = 13.sp)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Large files may take a while",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                    )
                 }
             }
         },
         confirmButton = {
-            TextButton(
-                enabled = !showProgress,
-                onClick = {
-                    val base = zipName.trim().ifEmpty { "archive" }
-                    val finalName = if (base.lowercase().endsWith(".zip")) base else "$base.zip"
-                    val outZip = getUniqueFile(File(currentPath), finalName)
-                    val sources = selectedPaths.map { File(it) }
-                    scope.launch {
-                        showProgress = true
-                        progressPercent = 0
-                        val r = withContext(Dispatchers.IO) {
-                            try {
-                                zipFiles(sources, outZip,
-                                    onProgress = { p -> progressPercent = p },
-                                    isCancelled = { false })
-                                Result.success(Unit)
-                            } catch (e: Exception) {
-                                Result.failure(e)
+            if (showProgress) {
+                TextButton(onClick = {
+                    // Hide dialog — ZIP continues
+                    showProgress = false
+                    onHide()
+                }) { Text("Hide") }
+            } else {
+                TextButton(
+                    enabled = !showProgress,
+                    onClick = {
+                        if (usePassword) {
+                            if (password.isEmpty()) {
+                                error = "Password cannot be empty"
+                                return@TextButton
+                            }
+                            if (password != confirmPassword) {
+                                error = "Passwords do not match"
+                                return@TextButton
                             }
                         }
-                        showProgress = false
-                        if (r.isSuccess) {
-                            Toast.makeText(context, "ZIP created", Toast.LENGTH_SHORT).show()
-                            onDismiss()
-                            onCreated()
-                        } else {
-                            Toast.makeText(context, "Failed", Toast.LENGTH_SHORT).show()
+                        val base = zipName.trim().ifEmpty { "archive" }
+                        val finalName = if (base.lowercase().endsWith(".zip")) base else "$base.zip"
+                        val outZip = getUniqueFile(File(currentPath), finalName)
+                        val sources = selectedPaths.map { File(it) }
+                        val pwd = if (usePassword) password else null
+
+                        scope.launch {
+                            showProgress = true
+                            progressPercent = 0
+                            onZipStart(outZip.name)
+                            val err = withContext(Dispatchers.IO) {
+                                if (pwd.isNullOrEmpty()) {
+                                    try {
+                                        zipFiles(sources, outZip,
+                                            onProgress = { p ->
+                                                progressPercent = p
+                                                onZipProgress(p)
+                                            },
+                                            isCancelled = { false })
+                                        null
+                                    } catch (e: Exception) {
+                                        "Failed: ${e.message ?: "Unknown"}"
+                                    }
+                                } else {
+                                    PasswordZipUtils.createEncryptedZip(
+                                        sources = sources,
+                                        outputZip = outZip,
+                                        password = pwd,
+                                        onProgress = { p ->
+                                            progressPercent = p
+                                            onZipProgress(p)
+                                        }
+                                    )
+                                }
+                            }
+                            showProgress = false
+                            if (err == null) {
+                                Toast.makeText(context, "ZIP created", Toast.LENGTH_SHORT).show()
+                                onZipComplete()
+                                onDismiss()
+                                onCreated()
+                            } else {
+                                error = err
+                                onZipComplete()
+                            }
                         }
                     }
-                }
-            ) { Text("Create") }
+                ) { Text("Create") }
+            }
         },
         dismissButton = {
-            TextButton(
-                enabled = !showProgress,
-                onClick = onDismiss
-            ) { Text("Cancel") }
+            if (!showProgress) {
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        }
+    )
+}
+
+@Composable
+fun ZipPasswordDialog(
+    zipFile: File?,
+    context: Context,
+    onDismiss: () -> Unit,
+    onExtract: (File, String) -> Unit
+) {
+    if (zipFile == null) return
+
+    var password by remember { mutableStateOf("") }
+    var showPassword by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Password Required") },
+        text = {
+            Column {
+                Text(
+                    zipFile.name,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                    maxLines = 1
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "This ZIP is password protected.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it; error = null },
+                    label = { Text("Enter password") },
+                    singleLine = true,
+                    visualTransformation = if (showPassword) VisualTransformation.None
+                    else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showPassword = !showPassword }) {
+                            Icon(
+                                imageVector = if (showPassword) Icons.Filled.VisibilityOff
+                                else Icons.Filled.Visibility,
+                                contentDescription = "Toggle"
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (error != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(error!!, fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                if (password.isEmpty()) {
+                    error = "Password cannot be empty"
+                    return@TextButton
+                }
+                onDismiss()
+                onExtract(zipFile, password)
+            }) { Text("Extract") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
 }

@@ -257,6 +257,10 @@ fun FileExplorerScreen(
     var showRenameDialog by remember { mutableStateOf(false) }
     var showNewFolderDialog by remember { mutableStateOf(false) }
     var showZipDialog by remember { mutableStateOf(false) }
+    var zipRunning by remember { mutableStateOf(false) }
+    var zipProgress by remember { mutableIntStateOf(0) }
+    var zipHidden by remember { mutableStateOf(false) }
+    var zipOutputName by remember { mutableStateOf("") }
     var newFolderText by remember { mutableStateOf("") }
 
     var showEncryptChoice by remember { mutableStateOf(false) }
@@ -1753,8 +1757,73 @@ fun FileExplorerScreen(
             onCreated = {
                 files = loadFiles(currentPath, sortMode, showHidden)
                 selectedPaths = emptySet()
+            },
+            onZipStart = { name ->
+                zipRunning = true
+                zipProgress = 0
+                zipOutputName = name
+                zipHidden = false
+            },
+            onZipProgress = { p ->
+                zipProgress = p
+            },
+            onZipComplete = {
+                zipRunning = false
+                zipHidden = false
+                zipProgress = 0
+                files = loadFiles(currentPath, sortMode, showHidden)
+                selectedPaths = emptySet()
+            },
+            onHide = {
+                zipHidden = true
             }
         )
+    }
+
+    // Floating progress card when ZIP is hidden
+    if (zipRunning && zipHidden) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            androidx.compose.material3.Card(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { zipHidden = false },
+                colors = androidx.compose.material3.CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CircularProgressIndicator(
+                        Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            "Zipping… $zipProgress%",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            fontWeight = FontWeight.Medium
+                        )
+                        if (zipOutputName.isNotEmpty()) {
+                            Text(
+                                zipOutputName,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f),
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 
     if (showEncryptChoice) {
