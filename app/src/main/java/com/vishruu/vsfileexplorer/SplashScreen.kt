@@ -143,7 +143,7 @@ fun SplashScreen(onFinished: () -> Unit) {
             Spacer(modifier = Modifier.height(40.dp))
 
             Text(
-                text = "v1.0",
+                text = "v1.2.1",
                 fontSize = 11.sp,
                 color = lightGrey.copy(alpha = 0.5f),
                 modifier = Modifier.alpha(versionAlpha.value)

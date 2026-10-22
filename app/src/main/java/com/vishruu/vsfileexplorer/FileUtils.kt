@@ -166,6 +166,12 @@ fun openFile(context: Context, file: File) {
             return
         }
 
+        // APK file → special installer intent
+        if (file.extension.lowercase() == "apk") {
+            installApk(context, file)
+            return
+        }
+
         val uri = FileProvider.getUriForFile(
             context,
             "${context.packageName}.fileprovider",
@@ -189,6 +195,24 @@ fun openFile(context: Context, file: File) {
             "Cannot open: ${e.message ?: "Unknown error"}",
             Toast.LENGTH_LONG
         ).show()
+    }
+}
+
+fun installApk(context: Context, file: File) {
+    try {
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file
+        )
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        Toast.makeText(context, "Cannot install: ${e.message}", Toast.LENGTH_LONG).show()
     }
 }
 

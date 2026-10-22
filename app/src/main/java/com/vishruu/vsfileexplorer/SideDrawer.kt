@@ -119,7 +119,7 @@ fun SideDrawerContent(
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = "v1.0",
+                            text = "v1.2.1",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f)
                         )
